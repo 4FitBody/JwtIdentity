@@ -2,6 +2,8 @@ using System.Reflection;
 using JwtIdentity.Data;
 using JwtIdentity.Models;
 using JwtIdentity.Options;
+using JwtIdentity.Services;
+using JwtIdentity.Services.Base;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -28,10 +30,13 @@ builder.Services.AddDbContext<JwtIdentityDbContext>(dbContextOptionsBuilder =>
     });
 });
 
-builder.Services.AddIdentity<User, IdentityRole>(options => {
+builder.Services.AddIdentity<User, IdentityRole>(options =>
+{
     options.Password.RequireNonAlphanumeric = true;
 })
     .AddEntityFrameworkStores<JwtIdentityDbContext>();
+
+builder.Services.AddScoped<IIdentityService, IdentityService>();
 
 builder.Services.AddControllers();
 
@@ -70,7 +75,8 @@ builder.Services.AddSwaggerGen(options =>
     options.AddSecurityDefinition(
         name: scheme,
 
-        new OpenApiSecurityScheme() {
+        new OpenApiSecurityScheme()
+        {
             Description = "Enter here jwt token with Bearer",
             In = ParameterLocation.Header,
             Name = "Authorization",
@@ -93,10 +99,12 @@ builder.Services.AddSwaggerGen(options =>
     );
 });
 
-builder.Services.AddCors(options => {
-    options.AddPolicy("BlazorWasmPolicy", corsBuilder => {
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("BlazorWasmPolicy", corsBuilder =>
+    {
         corsBuilder
-            .WithOrigins("http://localhost:5160", "http://localhost:5141")
+            .AllowAnyOrigin()
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -104,11 +112,12 @@ builder.Services.AddCors(options => {
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope()) {
+using (var scope = app.Services.CreateScope())
+{
     var dbContext = scope.ServiceProvider.GetRequiredService<JwtIdentityDbContext>();
-    
+
     await dbContext.Database.MigrateAsync();
-    
+
     await dbContext.Database.EnsureCreatedAsync();
 
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
@@ -116,20 +125,21 @@ using (var scope = app.Services.CreateScope()) {
     await roleManager.CreateAsync(new IdentityRole(DefaultRoles.User.ToString()));
 
     await roleManager.CreateAsync(new IdentityRole(DefaultRoles.Admin.ToString()));
-    
+
     await roleManager.CreateAsync(new IdentityRole(DefaultRoles.Moderator.ToString()));
-    
+
     await roleManager.CreateAsync(new IdentityRole(DefaultRoles.Trainer.ToString()));
-    
+
     await roleManager.CreateAsync(new IdentityRole(DefaultRoles.Nutritionist.ToString()));
 
     var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
 
-    var admin = new User{
+    var admin = new User
+    {
         Age = 30,
         UserName = "Admin",
         Surname = "Admin",
-        Email = "admin@gmail.com",   
+        Email = "admin@gmail.com",
     };
 
     await userManager.CreateAsync(admin, "Admin123!");
@@ -137,12 +147,9 @@ using (var scope = app.Services.CreateScope()) {
     await userManager.AddToRoleAsync(admin, DefaultRoles.Admin.ToString());
 }
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
+app.UseSwagger();
 
-    app.UseSwaggerUI();
-}
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 

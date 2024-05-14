@@ -7,14 +7,13 @@ using JwtIdentity.Dtos;
 using JwtIdentity.Models;
 using JwtIdentity.Options;
 using JwtIdentity.Services;
-using Microsoft.AspNetCore.Authorization;
+using JwtIdentity.Services.Base;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 
 [ApiController]
 [Route("api/[controller]/[action]")]
@@ -26,13 +25,15 @@ public class IdentityController : ControllerBase
     private readonly JwtIdentityDbContext dbContext;
     private readonly MailService mailService;
     private readonly IDataProtector dataProtector;
+    private readonly IIdentityService identityService;
 
     public IdentityController(
         IOptionsSnapshot<JwtOptions> jwtOptions,
         SignInManager<User> signInManager,
         UserManager<User> userManager,
         JwtIdentityDbContext dbContext,
-        IDataProtectionProvider dataProtectionProvider)
+        IDataProtectionProvider dataProtectionProvider,
+        IIdentityService identityService)
     {
         this.signInManager = signInManager;
 
@@ -45,6 +46,8 @@ public class IdentityController : ControllerBase
         this.mailService = new MailService();
 
         this.dataProtector = dataProtectionProvider.CreateProtector("4FitBodyIdentity");
+    
+        this.identityService = identityService;
     }
 
     [HttpPost]
@@ -59,7 +62,7 @@ public class IdentityController : ControllerBase
 
         var roles = await userManager.GetRolesAsync(user);
 
-        if (roles.Contains(loginDto.Roles.FirstOrDefault()) == false)
+        if (roles.Contains(loginDto.Roles!.FirstOrDefault()!) == false)
         {
             return base.BadRequest("Incorrect email or password");
         }
@@ -82,29 +85,7 @@ public class IdentityController : ControllerBase
             });
         }
 
-        var claims = roles
-            .Select(role => new Claim(ClaimTypes.Role, role))
-            .Append(new Claim(ClaimTypes.Email, loginDto.Email!))
-            .Append(new Claim(ClaimTypes.Name, user.UserName!))
-            .Append(new Claim(ClaimTypes.Surname, user.Surname!))
-            .Append(new Claim("Age", user.Age.ToString()!))
-            .Append(new Claim(ClaimTypes.NameIdentifier, user.Id));
-
-        var securityKey = new SymmetricSecurityKey(this.jwtOptions.KeyInBytes);
-
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-
-        var securityToken = new JwtSecurityToken(
-            issuer: this.jwtOptions.Issuers.First(),
-            audience: this.jwtOptions.Audience,
-            claims,
-            expires: DateTime.Now.AddMinutes(this.jwtOptions.LifetimeInMinutes),
-            signingCredentials: signingCredentials
-        );
-
-        var jwtSecurityTokenHandler = new JwtSecurityTokenHandler();
-
-        var jwt = jwtSecurityTokenHandler.WriteToken(securityToken);
+        var jwt = this.identityService.GetJwtAccessToken(roles, jwtOptions, user, loginDto.Email!);
 
         var refreshToken = new RefreshToken()
         {
@@ -167,22 +148,9 @@ public class IdentityController : ControllerBase
     {
         var handler = new JwtSecurityTokenHandler();
 
-        var validationResult = await handler.ValidateTokenAsync(
-            updateTokenDto.AccessToken,
-            new TokenValidationParameters()
-            {
-                ValidateLifetime = false,
-                IssuerSigningKey = new SymmetricSecurityKey(this.jwtOptions.KeyInBytes),
+        var validationResult = await this.identityService.ValidateTokenAsync(updateTokenDto.AccessToken, jwtOptions);
 
-                ValidateAudience = true,
-                ValidAudience = this.jwtOptions.Audience,
-
-                ValidateIssuer = true,
-                ValidIssuers = this.jwtOptions.Issuers,
-            }
-        );
-
-        if (validationResult.IsValid == false)
+        if (validationResult == false)
         {
             return base.BadRequest("Token is invalid!");
         }
@@ -207,27 +175,7 @@ public class IdentityController : ControllerBase
 
         var roles = await userManager.GetRolesAsync(user);
 
-        var claims = roles
-            .Select(role => new Claim(ClaimTypes.Role, role))
-            .Append(new Claim(ClaimTypes.Email, user.Email ?? "notset"))
-            .Append(new Claim(ClaimTypes.Name, user.UserName!))
-            .Append(new Claim(ClaimTypes.Surname, user.Surname!))
-            .Append(new Claim("Age", user.Age.ToString()!))
-            .Append(new Claim(ClaimTypes.NameIdentifier, user.Id));
-
-        var securityKey = new SymmetricSecurityKey(this.jwtOptions.KeyInBytes);
-
-        var signingCredentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
-
-        var newSecurityToken = new JwtSecurityToken(
-            issuer: this.jwtOptions.Issuers.First(),
-            audience: this.jwtOptions.Audience,
-            claims,
-            expires: DateTime.Now.AddMinutes(this.jwtOptions.LifetimeInMinutes),
-            signingCredentials: signingCredentials
-        );
-
-        var newJwt = handler.WriteToken(newSecurityToken);
+        var newJwt = this.identityService.GetJwtAccessToken(roles, jwtOptions, user, user.Email!);
 
         var refreshTokenToChange = this.dbContext.RefreshTokens.FirstOrDefault(refreshToken => refreshToken.Token == updateTokenDto.RefreshToken && refreshToken.UserId == id);
 
