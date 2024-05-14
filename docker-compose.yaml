@@ -23,7 +23,7 @@ services:
     environment:
       - POSTGRES_USER=emil
       - POSTGRES_PASSWORD=Secret123!
-      - POSTGRES_DB=library
+      - POSTGRES_DB=identity
     networks:
       - mybridgenetwork
     ports:
