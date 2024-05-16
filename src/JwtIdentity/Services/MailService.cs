@@ -16,9 +16,9 @@ public class MailService
             
             mail.To.Add(to);
             
-            mail.Subject = "Email address verification";
+            mail.Subject = "OTP verification";
             
-            mail.Body = $"<h1>Your email verification code: <code>{otp}</code></h1>";
+            mail.Body = $"<h3>Please use the following One Time Password (OTP) to register: <code>{otp}</code>. Do not share this OTP with anyone.</h3><br/><div><h3>Thank you!</h3></div>";
             
             mail.IsBodyHtml = true;
 

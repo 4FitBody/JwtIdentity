@@ -62,11 +62,6 @@ public class IdentityController : ControllerBase
 
         var roles = await userManager.GetRolesAsync(user);
 
-        if (roles.Contains(loginDto.Roles!.FirstOrDefault()!) == false)
-        {
-            return base.BadRequest("Incorrect email or password");
-        }
-
         var signInResult = await this.signInManager.PasswordSignInAsync(user, loginDto.Password!, false, true);
 
         if (signInResult.IsLockedOut)
